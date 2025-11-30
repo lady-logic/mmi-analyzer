@@ -1,0 +1,18 @@
+{
+  "name": "mmi-analyzer",
+  "version": "0.1.0",
+  "description": "MMI Architecture Quality Analyzer for Cursor",
+  "type": "module",
+  "main": "src/server.js",
+  "bin": {
+    "mmi-analyzer": "src/server.js"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node validate-config.js && node test-start.js",
+    "validate": "node validate-config.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.23.0"
+  }
+}
