@@ -1,7 +1,7 @@
 {
   "name": "mmi-analyzer",
-  "version": "0.1.0",
-  "description": "MMI Architecture Quality Analyzer for Cursor",
+  "version": "0.2.0",
+  "description": "MMI Architecture Quality Analyzer with Live Monitoring for Cursor",
   "type": "module",
   "main": "src/server.js",
   "bin": {
@@ -13,6 +13,7 @@
     "validate": "node validate-config.js"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.23.0"
+    "@modelcontextprotocol/sdk": "^1.23.0",
+    "chokidar": "^4.0.1"
   }
 }

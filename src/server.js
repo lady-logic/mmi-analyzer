@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import * as fileWatcher from './monitoring/file-watcher.js';
+import * as historyStorage from './monitoring/history-storage.js';
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
@@ -83,6 +85,42 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
           },
           required: ["projectPath"],
+        },
+      },
+      {
+        name: "start_monitoring",
+        description: "Starts continuous MMI monitoring for a C# project. Watches .cs files and automatically analyzes on changes. Stores score history over time.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            projectPath: {
+              type: "string",
+              description: "Path to the C# project directory",
+            },
+          },
+          required: ["projectPath"],
+        },
+      },
+      {
+        name: "stop_monitoring",
+        description: "Stops MMI monitoring for a project. Preserves history.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            projectPath: {
+              type: "string",
+              description: "Path to the C# project directory",
+            },
+          },
+          required: ["projectPath"],
+        },
+      },
+      {
+        name: "get_monitoring_status",
+        description: "Shows status of all monitored projects with current scores and trends.",
+        inputSchema: {
+          type: "object",
+          properties: {},
         },
       },
     ],
@@ -302,6 +340,244 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             }, null, 2),
           },
         ],
+      };
+    }
+  }
+  if (name === "start_monitoring") {
+    const projectPath = args.projectPath;
+    
+    const logPath = path.join(process.cwd(), 'mmi-analyzer.log');
+    fs.appendFileSync(logPath, `\n[${new Date().toISOString()}] Starting monitoring: ${projectPath}\n`);
+    
+    try {
+      // Check if path exists
+      if (!fs.existsSync(projectPath)) {
+        return {
+          content: [{
+            type: "text",
+            text: `❌ Path not found: ${projectPath}\n\nPlease check if the path is correct.`,
+          }],
+        };
+      }
+      
+      // Check if already watching
+      if (fileWatcher.isWatching(projectPath)) {
+        const current = historyStorage.getCurrentScore(projectPath);
+        return {
+          content: [{
+            type: "text",
+            text: `⚠️ Already monitoring: ${projectPath}\n\nCurrent score: ${current?.overall.toFixed(1) || 'N/A'}/5\n\nUse \`stop_monitoring\` first if you want to restart.`,
+          }],
+        };
+      }
+      
+      // Initialize project in history
+      historyStorage.initializeProject(projectPath);
+      
+      // Run initial analysis
+      console.error('[MMI] Running initial analysis...');
+      const layering = analyzeLayering(projectPath);
+      const encapsulation = analyzeEncapsulation(projectPath);
+      const abstraction = analyzeAbstraction(projectPath);
+      
+      const overallScore = ((layering.score + encapsulation.score + abstraction.score) / 3);
+      
+      // Save initial measurement
+      historyStorage.addMeasurement(projectPath, {
+        layering: layering.score,
+        encapsulation: encapsulation.score,
+        abstraction: abstraction.score,
+        overall: overallScore,
+        filesAnalyzed: layering.totalFiles
+      });
+      
+      // Start file watcher
+      const started = fileWatcher.startWatching(projectPath, (changedPath, changedFiles) => {
+        console.error(`[MMI] Files changed, running analysis...`);
+        
+        // Run full analysis (could optimize to only analyze changed files)
+        const l = analyzeLayering(changedPath);
+        const e = analyzeEncapsulation(changedPath);
+        const a = analyzeAbstraction(changedPath);
+        
+        const overall = ((l.score + e.score + a.score) / 3);
+        
+        historyStorage.addMeasurement(changedPath, {
+          layering: l.score,
+          encapsulation: e.score,
+          abstraction: a.score,
+          overall: overall,
+          filesAnalyzed: l.totalFiles
+        });
+        
+        console.error(`[MMI] Analysis complete. New score: ${overall.toFixed(1)}/5`);
+      });
+      
+      if (started) {
+        return {
+          content: [{
+            type: "text",
+            text: `✅ **Monitoring Started**
+  
+  **Project:** ${path.basename(projectPath)}
+  **Path:** ${projectPath}
+  **Initial Score:** ${overallScore.toFixed(1)}/5
+  
+  📊 **Initial Scores:**
+  - Layering: ${layering.score}/5
+  - Encapsulation: ${encapsulation.score}/5  
+  - Abstraction: ${abstraction.score}/5
+  
+  🔍 **Watching:** All .cs files in project
+  ⚡ **Auto-analysis:** Triggered on file save (2s debounce)
+  📈 **History:** Tracking score changes over time
+  
+  I'll automatically analyze your code whenever you save .cs files and track the trend!`,
+          }],
+        };
+      } else {
+        return {
+          content: [{
+            type: "text",
+            text: `❌ Failed to start monitoring for: ${projectPath}`,
+          }],
+        };
+      }
+      
+    } catch (error) {
+      fs.appendFileSync(logPath, `ERROR: ${error.message}\n${error.stack}\n`);
+      
+      return {
+        content: [{
+          type: "text",
+          text: `❌ Error starting monitoring:\n\n${error.message}`,
+        }],
+      };
+    }
+  }
+  
+  if (name === "stop_monitoring") {
+    const projectPath = args.projectPath;
+    
+    try {
+      const stopped = await fileWatcher.stopWatching(projectPath);
+      
+      if (stopped) {
+        const stats = historyStorage.getProjectStats(projectPath);
+        
+        return {
+          content: [{
+            type: "text",
+            text: `✅ **Monitoring Stopped**
+  
+  **Project:** ${path.basename(projectPath)}
+  **Duration:** ${stats?.duration || 'N/A'}
+  **Measurements:** ${stats?.measurementCount || 0}
+  **Final Score:** ${stats?.currentScore.toFixed(1) || 'N/A'}/5
+  
+  History has been preserved. Use \`get_monitoring_status\` to see trends.`,
+          }],
+        };
+      } else {
+        return {
+          content: [{
+            type: "text",
+            text: `⚠️ Project not being monitored: ${projectPath}`,
+          }],
+        };
+      }
+      
+    } catch (error) {
+      return {
+        content: [{
+          type: "text",
+          text: `❌ Error stopping monitoring:\n\n${error.message}`,
+        }],
+      };
+    }
+  }
+  
+  if (name === "get_monitoring_status") {
+    try {
+      const watchedProjects = fileWatcher.getWatchedProjects();
+      const monitoredProjects = historyStorage.getMonitoredProjects();
+      
+      if (monitoredProjects.length === 0) {
+        return {
+          content: [{
+            type: "text",
+            text: `ℹ️ **No Monitored Projects**
+  
+  No projects are currently being monitored.
+  
+  Use \`start_monitoring\` to begin tracking a project's architecture quality over time.`,
+          }],
+        };
+      }
+      
+      // Build status report
+      let report = `# 📊 MMI Monitoring Status\n\n`;
+      
+      // Active monitoring
+      if (watchedProjects.length > 0) {
+        report += `## 🟢 Active Monitoring (${watchedProjects.length})\n\n`;
+        
+        for (const projectPath of watchedProjects) {
+          const stats = historyStorage.getProjectStats(projectPath);
+          const current = historyStorage.getCurrentScore(projectPath);
+          const recent = historyStorage.getRecentMeasurements(projectPath, 5);
+          
+          report += `### ${path.basename(projectPath)}\n`;
+          report += `**Path:** ${projectPath}\n`;
+          report += `**Duration:** ${stats.duration}\n`;
+          report += `**Measurements:** ${stats.measurementCount}\n`;
+          report += `**Current Score:** ${current.overall.toFixed(1)}/5`;
+          
+          if (stats.improvement !== 0) {
+            const icon = stats.improvement > 0 ? '📈' : '📉';
+            const sign = stats.improvement > 0 ? '+' : '';
+            report += ` (${icon} ${sign}${stats.improvement.toFixed(1)} since start)`;
+          }
+          
+          report += `\n\n**Recent Trend:**\n`;
+          report += '```\n';
+          recent.forEach(m => {
+            const time = new Date(m.timestamp).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+            const bar = '█'.repeat(Math.round(m.overall)) + '░'.repeat(5 - Math.round(m.overall));
+            report += `${time}  ${m.overall.toFixed(1)}  ${bar}\n`;
+          });
+          report += '```\n\n';
+        }
+      }
+      
+      // Inactive (history only)
+      const inactiveProjects = monitoredProjects.filter(p => !watchedProjects.includes(p));
+      if (inactiveProjects.length > 0) {
+        report += `## ⚪ Inactive (History Available)\n\n`;
+        
+        for (const projectPath of inactiveProjects) {
+          const stats = historyStorage.getProjectStats(projectPath);
+          report += `- **${path.basename(projectPath)}**: ${stats.measurementCount} measurements, last score ${stats.currentScore.toFixed(1)}/5\n`;
+        }
+        report += '\n';
+      }
+      
+      report += `---\n\n`;
+      report += `💡 **Tip:** Use \`start_monitoring\` to resume monitoring inactive projects.\n`;
+      
+      return {
+        content: [{
+          type: "text",
+          text: report,
+        }],
+      };
+      
+    } catch (error) {
+      return {
+        content: [{
+          type: "text",
+          text: `❌ Error getting status:\n\n${error.message}`,
+        }],
       };
     }
   }
@@ -1036,6 +1312,18 @@ async function main() {
 }
 
 main().catch((error) => {
+  process.on('SIGINT', async () => {
+    console.error('\n[MMI] Shutting down...');
+    await fileWatcher.stopAll();
+    process.exit(0);
+  });
+  
+  process.on('SIGTERM', async () => {
+    console.error('\n[MMI] Shutting down...');
+    await fileWatcher.stopAll();
+    process.exit(0);
+  });
+
   console.error("Server error:", error);
   process.exit(1);
 });
