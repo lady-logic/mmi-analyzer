@@ -2,7 +2,12 @@
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import { 
+  CallToolRequestSchema, 
+  ListToolsRequestSchema,
+  ListResourcesRequestSchema,
+  ReadResourceRequestSchema
+} from "@modelcontextprotocol/sdk/types.js";
 
 // Tools
 import { 
@@ -18,6 +23,9 @@ import {
   handleMonitoringStatus
 } from './tools/monitoring-tools.js';
 
+// Resources
+import { listResources, readResource } from './resources/mmi-resources.js';
+
 // Utils
 import { logStartup } from './utils/logging.js';
 import * as fileWatcher from './monitoring/file-watcher.js';
@@ -31,6 +39,7 @@ const server = new Server(
   {
     capabilities: {
       tools: {},
+      resources: {},
     },
   }
 );
@@ -134,6 +143,26 @@ const TOOLS = [
 // List available tools
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return { tools: TOOLS };
+});
+
+// List available resources
+server.setRequestHandler(ListResourcesRequestSchema, async () => {
+  const resources = listResources();
+  return { resources };
+});
+
+// Read a specific resource
+server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+  const { uri } = request.params;
+  
+  try {
+    const resource = readResource(uri);
+    return {
+      contents: [resource]
+    };
+  } catch (error) {
+    throw new Error(`Failed to read resource ${uri}: ${error.message}`);
+  }
 });
 
 // Route tool calls to handlers
