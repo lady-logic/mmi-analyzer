@@ -9,11 +9,15 @@
   },
   "scripts": {
     "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
     "test": "node validate-config.js && node test-start.js",
     "validate": "node validate-config.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.23.0",
     "chokidar": "^4.0.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.11"
   }
 }

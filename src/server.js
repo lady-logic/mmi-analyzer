@@ -14,7 +14,8 @@ import {
   handleLayeringAnalysis,
   handleEncapsulationAnalysis,
   handleAbstractionAnalysis,
-  handleMMIAnalysis
+  handleMMIAnalysis,
+  handleArchitectureHeatmap
 } from './tools/analysis-tools.js';
 
 import {
@@ -138,6 +139,20 @@ const TOOLS = [
       properties: {},
     },
   },
+  {
+    name: "visualize_architecture",
+    description: "Generate interactive architecture heatmap visualization with D3.js. Shows files as nodes colored by score (green=good, red=critical), dependencies as links, violations highlighted. Click nodes to see details.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        projectPath: {
+          type: "string",
+          description: "Path to the C# project directory",
+        },
+      },
+      required: ["projectPath"],
+    },
+  },
 ];
 
 // List available tools
@@ -190,6 +205,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       
     case "get_monitoring_status":
       return handleMonitoringStatus();
+      
+    case "visualize_architecture":
+      return handleArchitectureHeatmap(args);
       
     default:
       throw new Error(`Unknown tool: ${name}`);

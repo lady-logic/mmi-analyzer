@@ -5,6 +5,7 @@ import { formatLayeringReport } from '../formatters/layering-formatter.js';
 import { formatEncapsulationReport } from '../formatters/encapsulation-formatter.js';
 import { formatAbstractionReport } from '../formatters/abstraction-formatter.js';
 import { formatCombinedReport } from '../formatters/combined-formatter.js';
+import { generateHeatmap } from '../visualizations/heatmap-generator.js';
 import { validateProjectPath } from '../utils/validation.js';
 import { logToolCall, logError } from '../utils/logging.js';
 import { createSuccessResponse, createJsonErrorResponse } from '../utils/response.js';
@@ -102,6 +103,43 @@ export function handleMMIAnalysis(args) {
     return createSuccessResponse(report);
   } catch (error) {
     logError(error, 'analyze_mmi');
+    return createJsonErrorResponse(error.message, 'Check the log file for details.');
+  }
+}
+
+/**
+ * Handle architecture heatmap visualization tool
+ */
+export function handleArchitectureHeatmap(args) {
+  logToolCall('visualize_architecture', args);
+  
+  const { projectPath } = args;
+  const validation = validateProjectPath(projectPath);
+  
+  if (!validation.valid) {
+    return createJsonErrorResponse(validation.error, 'Please check if the path is correct.');
+  }
+  
+  try {
+    console.error('[MMI] Generating architecture heatmap...');
+    
+    const layering = analyzeLayering(projectPath);
+    const encapsulation = analyzeEncapsulation(projectPath);
+    const abstraction = analyzeAbstraction(projectPath);
+    
+    const html = generateHeatmap(layering, encapsulation, abstraction);
+    
+    return {
+      content: [
+        {
+          type: "text",
+          text: html,
+          mimeType: "text/html"
+        }
+      ]
+    };
+  } catch (error) {
+    logError(error, 'visualize_architecture');
     return createJsonErrorResponse(error.message, 'Check the log file for details.');
   }
 }
