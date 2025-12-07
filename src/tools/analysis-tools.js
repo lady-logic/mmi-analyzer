@@ -12,11 +12,12 @@ import { createSuccessResponse, createJsonErrorResponse } from '../utils/respons
 
 /**
  * Handle layering analysis tool
+ * Mit mode-Parameter (compact/detailed)
  */
 export function handleLayeringAnalysis(args) {
   logToolCall('analyze_layering', args);
   
-  const { projectPath } = args;
+  const { projectPath, mode = 'compact' } = args;  
   const validation = validateProjectPath(projectPath);
   
   if (!validation.valid) {
@@ -25,7 +26,7 @@ export function handleLayeringAnalysis(args) {
   
   try {
     const result = analyzeLayering(projectPath);
-    const report = formatLayeringReport(result);
+    const report = formatLayeringReport(result, mode);  
     return createSuccessResponse(report);
   } catch (error) {
     logError(error, 'analyze_layering');
@@ -39,7 +40,7 @@ export function handleLayeringAnalysis(args) {
 export function handleEncapsulationAnalysis(args) {
   logToolCall('analyze_encapsulation', args);
   
-  const { projectPath } = args;
+  const { projectPath, mode = 'compact' } = args;  
   const validation = validateProjectPath(projectPath);
   
   if (!validation.valid) {
@@ -48,7 +49,7 @@ export function handleEncapsulationAnalysis(args) {
   
   try {
     const result = analyzeEncapsulation(projectPath);
-    const report = formatEncapsulationReport(result);
+    const report = formatEncapsulationReport(result, mode);  
     return createSuccessResponse(report);
   } catch (error) {
     logError(error, 'analyze_encapsulation');
@@ -62,7 +63,7 @@ export function handleEncapsulationAnalysis(args) {
 export function handleAbstractionAnalysis(args) {
   logToolCall('analyze_abstraction', args);
   
-  const { projectPath } = args;
+  const { projectPath, mode = 'compact' } = args;  
   const validation = validateProjectPath(projectPath);
   
   if (!validation.valid) {
@@ -71,7 +72,7 @@ export function handleAbstractionAnalysis(args) {
   
   try {
     const result = analyzeAbstraction(projectPath);
-    const report = formatAbstractionReport(result);
+    const report = formatAbstractionReport(result, mode);  
     return createSuccessResponse(report);
   } catch (error) {
     logError(error, 'analyze_abstraction');
@@ -82,28 +83,33 @@ export function handleAbstractionAnalysis(args) {
 /**
  * Handle complete MMI analysis tool
  */
+/**
+ * Handle MMI analysis
+ * @param {Object} args - { projectPath, mode, useCache }
+ */
 export function handleMMIAnalysis(args) {
   logToolCall('analyze_mmi', args);
   
-  const { projectPath } = args;
+  const { projectPath, mode = 'compact', useCache = false } = args;  // ⬅️ NEU: useCache
   const validation = validateProjectPath(projectPath);
   
   if (!validation.valid) {
-    return createJsonErrorResponse(validation.error, 'Please check if the path is correct.');
+    return createJsonErrorResponse(validation.error);
   }
   
   try {
-    console.error('[MMI] Running complete MMI analysis...');
+    console.error('[MMI] Running MMI analysis...');
     
-    const layering = analyzeLayering(projectPath);
-    const encapsulation = analyzeEncapsulation(projectPath);
-    const abstraction = analyzeAbstraction(projectPath);
+    // useCache übergeben
+    const layering = analyzeLayering(projectPath, useCache);
+    const encapsulation = analyzeEncapsulation(projectPath, useCache);
+    const abstraction = analyzeAbstraction(projectPath, useCache);
     
-    const report = formatCombinedReport(layering, encapsulation, abstraction);
+    const report = formatCombinedReport(layering, encapsulation, abstraction, mode);
     return createSuccessResponse(report);
   } catch (error) {
     logError(error, 'analyze_mmi');
-    return createJsonErrorResponse(error.message, 'Check the log file for details.');
+    return createJsonErrorResponse(error.message);
   }
 }
 

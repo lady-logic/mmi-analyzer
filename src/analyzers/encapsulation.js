@@ -1,12 +1,13 @@
 import fs from 'fs';
 import path from 'path';
+import { hasFileChanged } from '../utils/file-cache.js';
 
 /**
- * Analyzes encapsulation quality (public vs internal visibility)
+ * Analyzes encapsulation quality
  * @param {string} projectPath - Path to the C# project
- * @returns {Object} Analysis results with visibility stats and score
+ * @param {boolean} useCache - Use file cache (default: true)
  */
-export function analyzeEncapsulation(projectPath) {
+export function analyzeEncapsulation(projectPath, useCache = true) {
   const files = findCSharpFiles(projectPath);
   
   const stats = {
@@ -23,19 +24,20 @@ export function analyzeEncapsulation(projectPath) {
   console.error(`[MMI] Analyzing encapsulation for ${files.length} files`);
   
   for (const file of files) {
+    // Skip unchanged
+    if (useCache && !hasFileChanged(file)) {
+      continue;
+    }
+    
     const relativePath = file.replace(projectPath, '');
     const content = fs.readFileSync(file, 'utf8');
     const fileName = path.basename(file);
     
-    // Count visibility modifiers
     analyzeVisibility(content, stats);
-    
-    // Check for over-exposed types
     const exposed = checkOverExposure(content, fileName, relativePath);
     overExposed.push(...exposed);
   }
   
-  // Calculate totals and percentages
   const totalTypes = stats.publicClasses + stats.internalClasses + 
                      stats.publicInterfaces + stats.internalInterfaces +
                      stats.publicRecords + stats.internalRecords;
@@ -43,7 +45,6 @@ export function analyzeEncapsulation(projectPath) {
   const publicTypes = stats.publicClasses + stats.publicInterfaces + stats.publicRecords;
   const publicPercentage = totalTypes > 0 ? ((publicTypes / totalTypes) * 100).toFixed(1) : 0;
   
-  // Calculate score
   const score = calculateScore(parseFloat(publicPercentage));
   
   return {

@@ -1,158 +1,139 @@
+import { getReportConfig } from '../config/report-config.js';
+
 /**
  * Format encapsulation analysis results as readable report
+ * @param {Object} result - Analysis result
+ * @param {string} mode - 'compact' or 'detailed'
  */
-export function formatEncapsulationReport(result) {
-    const { 
-      projectPath, 
-      totalFiles, 
-      totalTypes,
-      stats,
-      publicTypes,
-      publicPercentage, 
-      overExposed,
-      overExposedCount,
-      score, 
-      level 
-    } = result;
-    
-    let report = `# 🔒 MMI Encapsulation Analysis Report
+export function formatEncapsulationReport(result, mode = 'compact') {
+  const config = getReportConfig(mode);
+  const { 
+    projectPath, 
+    totalFiles, 
+    totalTypes,
+    stats,
+    publicTypes,
+    publicPercentage, 
+    overExposed,
+    overExposedCount,
+    score, 
+    level 
+  } = result;
   
-  **Project:** ${projectPath}
-  **Files Analyzed:** ${totalFiles}
-  **Total Types:** ${totalTypes}
-  **Public Types:** ${publicTypes} (${publicPercentage}%)
-  **MMI Score:** ${score}/5 (${level})
+  // COMPACT: Eine Zeile Header
+  let report = `# 🔒 Encapsulation Analysis\n\n`;
+  report += `**Score:** ${score}/5 (${level}) | **Public:** ${publicPercentage}% (${publicTypes}/${totalTypes}) | **Over-Exposed:** ${overExposedCount}\n\n`;
   
-  ---
-  
-  ## 📊 Visibility Breakdown
-  
-  | Type | Public | Internal | Total |
-  |------|--------|----------|-------|
-  | Classes | ${stats.publicClasses} | ${stats.internalClasses} | ${stats.publicClasses + stats.internalClasses} |
-  | Interfaces | ${stats.publicInterfaces} | ${stats.internalInterfaces} | ${stats.publicInterfaces + stats.internalInterfaces} |
-  | Records | ${stats.publicRecords} | ${stats.internalRecords} | ${stats.publicRecords + stats.internalRecords} |
-  | **Total** | **${publicTypes}** | **${totalTypes - publicTypes}** | **${totalTypes}** |
-  
-  **Public Percentage:** ${publicPercentage}%
-  
-  ---
-  
-  `;
-  
-    if (score >= 4) {
-      report += `## ✅ Excellent Encapsulation!
-  
-  Your API surface is well-controlled with ${publicPercentage}% public types.
-  This indicates good information hiding and implementation details properly encapsulated.
-  
-  `;
-    } else {
-      report += `## ⚠️ Encapsulation Issues Detected
-  
-  **${publicPercentage}%** of your types are public. Target: **< 30%**
-  
-  `;
-    }
-  
-    if (overExposedCount > 0) {
-      report += `### 🔓 Potentially Over-Exposed Types (${overExposedCount})
-  
-  These types are public but might be implementation details:
-  
-  `;
-      
-      const byFile = {};
-      overExposed.forEach(item => {
-        if (!byFile[item.file]) byFile[item.file] = [];
-        byFile[item.file].push(item);
-      });
-      
-      const files = Object.keys(byFile).slice(0, 20);
-      files.forEach(file => {
-        report += `**${file}:**\n`;
-        byFile[file].forEach(item => {
-          report += `- \`${item.type} ${item.name}\` → Consider making internal\n`;
-        });
-        report += '\n';
-      });
-      
-      if (overExposedCount > 20) {
-        report += `_... and ${overExposedCount - 20} more types_\n\n`;
-      }
-    } else {
-      report += `### ✅ No Over-Exposed Types Detected
-  
-  All public types appear to be intentionally exposed (Controllers, DTOs, Contracts).
-  
-  `;
-    }
-  
-    report += `---
-  
-  ## 💡 Recommendations
-  
-  `;
-  
-    if (publicPercentage > 40) {
-      report += `**Priority: HIGH** 🔴
-  
-  Your API surface is too large (${publicPercentage}%). This makes:
-  - Code harder to maintain (more surface area to support)
-  - Breaking changes more likely
-  - Implementation details exposed
-  
-  **Action Items:**
-  1. Review all public classes outside API/Web layers
-  2. Change implementation details to \`internal\`
-  3. Use \`internal\` as default, \`public\` only when needed
-  4. Extract public interfaces to separate Contracts folder
-  
-  **Expected Impact:** Could improve score to ${Math.min(5, score + 2)}/5
-  
-  `;
-    } else if (publicPercentage > 30) {
-      report += `**Priority: MEDIUM** 🟡
-  
-  Your encapsulation is acceptable but could be improved.
-  
-  **Action Items:**
-  1. Review the ${overExposedCount} potentially over-exposed types
-  2. Make implementation details \`internal\`
-  3. Document why remaining public types need to be public
-  
-  **Expected Impact:** Could improve score to ${Math.min(5, score + 1)}/5
-  
-  `;
-    } else {
-      report += `**Keep up the good work!** ✅
-  
-  Your encapsulation is excellent. Continue to:
-  - Default to \`internal\` for new types
-  - Only make types \`public\` when they're part of the API contract
-  - Regularly review public surface area
-  
-  `;
-    }
-  
-    report += `---
-  
-  ## 📋 MMI Assessment
-  
-  **Current Level:** ${score}/5 (${level})
-  
-  | Public % | Score | Assessment |
-  |----------|-------|------------|
-  | < 20% | 5 | Excellent - Minimal API surface |
-  | 20-30% | 4 | Good - Well-controlled |
-  | 30-40% | 3 | Acceptable - Some over-exposure |
-  | 40-50% | 2 | Poor - Too much exposed |
-  | 50-60% | 1 | Bad - Needs refactoring |
-  | > 60% | 0 | Critical - Everything is public |
-  
-  **Industry Best Practice:** Keep < 30% of types public
-  
-  `;
-  
-    return report;
+  // Nur bei detailed mode: Ausführliche Tabelle
+  if (config.showDetailedStats) {
+    report += `## 📊 Visibility Breakdown\n\n`;
+    report += `| Type | Public | Internal | Total |\n`;
+    report += `|------|--------|----------|-------|\n`;
+    report += `| Classes | ${stats.publicClasses} | ${stats.internalClasses} | ${stats.publicClasses + stats.internalClasses} |\n`;
+    report += `| Interfaces | ${stats.publicInterfaces} | ${stats.internalInterfaces} | ${stats.publicInterfaces + stats.internalInterfaces} |\n`;
+    report += `| Records | ${stats.publicRecords} | ${stats.internalRecords} | ${stats.publicRecords + stats.internalRecords} |\n`;
+    report += `| **Total** | **${publicTypes}** | **${totalTypes - publicTypes}** | **${totalTypes}** |\n\n`;
   }
+  
+  // Assessment
+  if (score >= 4) {
+    report += `## ✅ Excellent Encapsulation!\n\n`;
+    report += `API surface well-controlled at ${publicPercentage}%. Good information hiding.\n\n`;
+  } else {
+    report += `## ⚠️ Encapsulation Issues\n\n`;
+    report += `**${publicPercentage}%** public (target: <30%)\n\n`;
+  }
+  
+  // Over-exposed types
+  if (overExposedCount > 0) {
+    if (config.groupSimilar) {
+      report += formatCompactOverExposed(overExposed, config);
+    } else {
+      report += formatDetailedOverExposed(overExposed, config);
+    }
+  } else {
+    report += `### ✅ No Over-Exposed Types\n\n`;
+    report += `All public types appear intentional (Controllers, DTOs, Contracts).\n\n`;
+  }
+  
+  // Recommendations
+  report += `---\n\n## 💡 Action\n\n`;
+  report += getCompactEncapsulationRecommendation(score, publicPercentage, overExposedCount);
+  
+  return report;
+}
+
+/**
+ * COMPACT: Gruppierte Darstellung von over-exposed types
+ */
+function formatCompactOverExposed(overExposed, config) {
+  let report = `### 🔓 Over-Exposed Types (${overExposed.length})\n\n`;
+  
+  // Gruppiere nach Type (class, interface, record)
+  const byType = {};
+  overExposed.forEach(item => {
+    if (!byType[item.type]) byType[item.type] = [];
+    byType[item.type].push(item);
+  });
+  
+  for (const [type, items] of Object.entries(byType)) {
+    report += `**${type}** (${items.length}): `;
+    
+    const showCount = Math.min(items.length, config.maxFilesListed);
+    const names = items.slice(0, showCount).map(i => i.name).join(', ');
+    report += names;
+    
+    if (items.length > showCount) {
+      report += `, ...+${items.length - showCount} more`;
+    }
+    report += `\n`;
+  }
+  
+  report += `\n💡 Consider making these \`internal\` unless they're part of public API.\n\n`;
+  
+  return report;
+}
+
+/**
+ * DETAILED: Einzelne Auflistung
+ */
+function formatDetailedOverExposed(overExposed, config) {
+  let report = `### 🔓 Potentially Over-Exposed Types (${overExposed.length})\n\n`;
+  report += `These types are public but might be implementation details:\n\n`;
+  
+  const byFile = {};
+  overExposed.forEach(item => {
+    if (!byFile[item.file]) byFile[item.file] = [];
+    byFile[item.file].push(item);
+  });
+  
+  const files = Object.keys(byFile).slice(0, config.maxFilesListed);
+  files.forEach(file => {
+    report += `**${file}:**\n`;
+    byFile[file].forEach(item => {
+      report += `- \`${item.type} ${item.name}\` → Consider making internal\n`;
+    });
+    report += '\n';
+  });
+  
+  if (overExposed.length > config.maxFilesListed) {
+    report += `_... and ${overExposed.length - config.maxFilesListed} more types_\n\n`;
+  }
+  
+  return report;
+}
+
+/**
+ * Kurze Empfehlung
+ */
+function getCompactEncapsulationRecommendation(score, publicPercentage, overExposedCount) {
+  if (publicPercentage > 40) {
+    return `⚠️ HIGH: Reduce from ${publicPercentage}% → <30% (change ${overExposedCount} types to internal)\n` +
+           `Expected: Score ${score} → ${Math.min(5, score + 2)}\n`;
+  } else if (publicPercentage > 30) {
+    return `🟡 MEDIUM: Review ${overExposedCount} over-exposed types\n` +
+           `Expected: Score ${score} → ${Math.min(5, score + 1)}\n`;
+  } else {
+    return `✅ Excellent! Keep defaulting to \`internal\` for new types.\n`;
+  }
+}

@@ -57,6 +57,12 @@ const TOOLS = [
           type: "string",
           description: "Path to the C# project directory (e.g., D:\\Projects\\MyApp)",
         },
+        mode: {  
+          type: "string",
+          description: "Report mode: 'compact' (default, token-optimized) or 'detailed' (full info)",
+          enum: ["compact", "detailed"],
+          default: "compact"
+        }
       },
       required: ["projectPath"],
     },
@@ -71,6 +77,12 @@ const TOOLS = [
           type: "string",
           description: "Path to the C# project directory",
         },
+        mode: {  
+          type: "string",
+          description: "Report mode: 'compact' (default, token-optimized) or 'detailed' (full info)",
+          enum: ["compact", "detailed"],
+          default: "compact"
+        }
       },
       required: ["projectPath"],
     },
@@ -85,6 +97,12 @@ const TOOLS = [
           type: "string",
           description: "Path to the C# project directory",
         },
+        mode: {  
+          type: "string",
+          description: "Report mode: 'compact' (default, token-optimized) or 'detailed' (full info)",
+          enum: ["compact", "detailed"],
+          default: "compact"
+        }
       },
       required: ["projectPath"],
     },
@@ -99,6 +117,12 @@ const TOOLS = [
           type: "string",
           description: "Path to the C# project directory",
         },
+        mode: {  
+          type: "string",
+          description: "Report mode: 'compact' (default, token-optimized) or 'detailed' (full info)",
+          enum: ["compact", "detailed"],
+          default: "compact"
+        }
       },
       required: ["projectPath"],
     },

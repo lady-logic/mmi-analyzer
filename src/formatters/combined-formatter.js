@@ -1,163 +1,154 @@
 import path from 'path';
+import { getReportConfig } from '../config/report-config.js';
 
 /**
  * Format combined MMI report (all 3 dimensions)
+ * @param {Object} layering - Layering analysis result
+ * @param {Object} encapsulation - Encapsulation analysis result
+ * @param {Object} abstraction - Abstraction analysis result
+ * @param {string} mode - 'compact' or 'detailed'
  */
-export function formatCombinedReport(layering, encapsulation, abstraction) {
+export function formatCombinedReport(layering, encapsulation, abstraction, mode = 'compact') {
+  const config = getReportConfig(mode);
   const overallScore = ((layering.score + encapsulation.score + abstraction.score) / 3).toFixed(1);
   const overallLevel = getOverallLevel(parseFloat(overallScore));
+  const projectName = path.basename(layering.projectPath);
   
-  let report = `# 🌳 Complete MMI Analysis Report
+  // COMPACT: Kurzer Header
+  let report = `# 🌳 MMI Analysis - ${projectName}\n\n`;
+  report += `**Overall Score:** ${overallScore}/5 (${overallLevel})\n\n`;
+  
+  // Scorecard (immer zeigen, aber kompakt)
+  report += `## 📊 Scorecard\n\n`;
+  report += `| Dimension | Score | Status |\n`;
+  report += `|-----------|-------|--------|\n`;
+  report += `| Layering | ${layering.score}/5 | ${getStatusIcon(layering.score)} ${layering.level} |\n`;
+  report += `| Encapsulation | ${encapsulation.score}/5 | ${getStatusIcon(encapsulation.score)} ${encapsulation.level} |\n`;
+  report += `| Abstraction | ${abstraction.score}/5 | ${getStatusIcon(abstraction.score)} ${abstraction.level} |\n`;
+  report += `| **Overall** | **${overallScore}/5** | ${getStatusIcon(parseFloat(overallScore))} **${overallLevel}** |\n\n`;
+  
+  // Details nur im detailed mode
+  if (config.showDetailedStats) {
+    report += formatDetailedDimensionInfo(layering, encapsulation, abstraction);
+  }
+  
+  // Priority Actions (immer zeigen, aber kompakt)
+  report += `## 🎯 Priority Actions\n\n`;
+  report += formatCompactActions(layering, encapsulation, abstraction);
+  
+  // Roadmap (compact vs detailed)
+  if (config.groupSimilar) {
+    report += formatCompactRoadmap(parseFloat(overallScore));
+  } else {
+    report += formatDetailedRoadmap(parseFloat(overallScore));
+  }
+  
+  return report;
+}
 
-**Project:** ${layering.projectPath}
-**Overall MMI Score:** ${overallScore}/5 (${overallLevel})
-
----
-
-## 📊 MMI Scorecard
-
-| Dimension | Score | Level | Status |
-|-----------|-------|-------|--------|
-| **2. Layering** (Schichtung) | ${layering.score}/5 | ${layering.level} | ${getStatusIcon(layering.score)} |
-| **5. Encapsulation** (Kapselung) | ${encapsulation.score}/5 | ${encapsulation.level} | ${getStatusIcon(encapsulation.score)} |
-| **8. Abstraction Levels** | ${abstraction.score}/5 | ${abstraction.level} | ${getStatusIcon(abstraction.score)} |
-| **Overall MMI** | **${overallScore}/5** | **${overallLevel}** | ${getStatusIcon(parseFloat(overallScore))} |
-
----
-
-## 📈 Dimension Details
-
-### 🏛️ Dimension 2: Layering
-- **Violations:** ${layering.violationCount}
-- **Files:** ${layering.totalFiles}
-- **Status:** ${layering.violationCount === 0 ? '✅ Perfect' : `⚠️ ${layering.violationCount} violations found`}
-
-### 🔒 Dimension 5: Encapsulation
-- **Public Types:** ${encapsulation.publicTypes} (${encapsulation.publicPercentage}%)
-- **Over-Exposed:** ${encapsulation.overExposedCount}
-- **Status:** ${encapsulation.publicPercentage < 30 ? '✅ Good' : `⚠️ ${encapsulation.publicPercentage}% public (target: <30%)`}
-
-### 🎯 Dimension 8: Abstraction Levels
-- **Files with Issues:** ${abstraction.filesWithIssues}
-- **Total Issues:** ${abstraction.issueCount}
-- **Status:** ${abstraction.issueCount === 0 ? '✅ Clean separation' : `⚠️ ${abstraction.issueCount} mixing issues`}
-
----
-
-## 🎯 Top Priority Actions
-
-`;
-
+/**
+ * COMPACT: Kurze Action Items
+ */
+function formatCompactActions(layering, encapsulation, abstraction) {
   const actions = [];
   
-  if (layering.score < 4) {
-    actions.push({
-      priority: 'HIGH',
-      dimension: 'Layering',
-      action: `Fix ${layering.violationCount} layer violations`,
-      impact: `Score ${layering.score} → ${Math.min(5, layering.score + 2)}`
-    });
+  if (layering.score < 4 && layering.violationCount > 0) {
+    actions.push(`1️⃣ **Layering**: Fix ${layering.violationCount} violations → ${layering.score}→${Math.min(5, layering.score + 1)}`);
   }
   
   if (encapsulation.score < 3) {
-    actions.push({
-      priority: 'HIGH',
-      dimension: 'Encapsulation',
-      action: `Reduce public types from ${encapsulation.publicPercentage}% to <30%`,
-      impact: `Score ${encapsulation.score} → ${Math.min(5, encapsulation.score + 2)}`
-    });
+    actions.push(`2️⃣ **Encapsulation**: Reduce public types ${encapsulation.publicPercentage}%→30% → ${encapsulation.score}→${Math.min(5, encapsulation.score + 1)}`);
   }
   
-  if (abstraction.score < 4) {
-    actions.push({
-      priority: 'HIGH',
-      dimension: 'Abstraction',
-      action: `Separate business logic from ${abstraction.issueCount} technical details`,
-      impact: `Score ${abstraction.score} → ${Math.min(5, abstraction.score + 2)}`
-    });
+  if (abstraction.score < 4 && abstraction.issueCount > 0) {
+    actions.push(`3️⃣ **Abstraction**: Separate ${abstraction.issueCount} mixed concerns → ${abstraction.score}→${Math.min(5, abstraction.score + 1)}`);
   }
   
   if (actions.length === 0) {
-    report += `### ✅ No Critical Issues!
-
-Your architecture is in excellent shape. Keep maintaining these standards!
-
-`;
-  } else {
-    actions.forEach((action, idx) => {
-      report += `### ${idx + 1}. [${action.priority}] ${action.dimension}
-
-**Action:** ${action.action}  
-**Expected Impact:** ${action.impact}
-
-`;
-    });
+    return `✅ **No Critical Issues!** Architecture is in excellent shape.\n\n`;
   }
   
-  report += `---
+  return actions.join('\n') + '\n\n';
+}
 
-## 🚀 Improvement Roadmap
-
-`;
-
-  const currentScore = parseFloat(overallScore);
+/**
+ * COMPACT: Kurze Roadmap
+ */
+function formatCompactRoadmap(currentScore) {
+  let report = `## 🚀 Roadmap\n\n`;
   
   if (currentScore >= 4.0) {
-    report += `**Current State:** Excellent (${overallScore}/5)
-
-Your architecture is strong. Focus on:
-- Maintaining current quality standards
-- Code reviews to prevent regressions
-- Documenting architectural decisions
-
-`;
+    report += `**Status:** Excellent (${currentScore}/5)\n`;
+    report += `**Focus:** Maintain quality, prevent regressions\n\n`;
   } else if (currentScore >= 3.0) {
-    report += `**This Sprint:**
-- Address HIGH priority items above
-- Expected improvement: ${overallScore} → ${Math.min(5, currentScore + 0.8).toFixed(1)}
-
-**This Quarter:**
-- Complete all dimension improvements
-- Target score: 4.5+/5
-
-`;
+    report += `**This Sprint:** Address priority items → ${Math.min(5, currentScore + 0.8).toFixed(1)}/5\n`;
+    report += `**This Quarter:** Complete all improvements → 4.5+/5\n\n`;
   } else {
-    report += `**Immediate (This Week):**
-- Fix critical violations in highest-impact dimension
-- Expected: ${overallScore} → ${Math.min(5, currentScore + 1.0).toFixed(1)}
-
-**This Sprint:**
-- Address all HIGH priority items
-- Expected: ${Math.min(5, currentScore + 1.5).toFixed(1)}
-
-**This Quarter:**
-- Systematic refactoring of all dimensions
-- Target: 4.0+/5
-
-`;
+    report += `**This Week:** Fix critical violations → ${Math.min(5, currentScore + 1.0).toFixed(1)}/5\n`;
+    report += `**This Sprint:** Address all HIGH items → ${Math.min(5, currentScore + 1.5).toFixed(1)}/5\n`;
+    report += `**This Quarter:** Systematic refactoring → 4.0+/5\n\n`;
   }
   
-  report += `---
+  return report;
+}
 
-## 📋 MMI Reference
+/**
+ * DETAILED: Ausführliche Dimension Info
+ */
+function formatDetailedDimensionInfo(layering, encapsulation, abstraction) {
+  let report = `## 📈 Dimension Details\n\n`;
+  
+  report += `### 🏛️ Dimension 2: Layering\n`;
+  report += `- **Violations:** ${layering.violationCount}\n`;
+  report += `- **Files:** ${layering.totalFiles}\n`;
+  report += `- **Status:** ${layering.violationCount === 0 ? '✅ Perfect' : `⚠️ ${layering.violationCount} violations found`}\n\n`;
+  
+  report += `### 🔒 Dimension 5: Encapsulation\n`;
+  report += `- **Public Types:** ${encapsulation.publicTypes} (${encapsulation.publicPercentage}%)\n`;
+  report += `- **Over-Exposed:** ${encapsulation.overExposedCount}\n`;
+  report += `- **Status:** ${encapsulation.publicPercentage < 30 ? '✅ Good' : `⚠️ ${encapsulation.publicPercentage}% public (target: <30%)`}\n\n`;
+  
+  report += `### 🎯 Dimension 8: Abstraction Levels\n`;
+  report += `- **Files with Issues:** ${abstraction.filesWithIssues}\n`;
+  report += `- **Total Issues:** ${abstraction.issueCount}\n`;
+  report += `- **Status:** ${abstraction.issueCount === 0 ? '✅ Clean separation' : `⚠️ ${abstraction.issueCount} mixing issues`}\n\n`;
+  
+  report += `---\n\n`;
+  
+  return report;
+}
 
-**Scoring Scale:**
-- **5 - Exzellent:** State-of-the-art architecture
-- **4 - Gut:** Strong architecture, minor improvements
-- **3 - Akzeptabel:** Solid foundation, some refactoring needed
-- **2 - Verbesserungswürdig:** Significant technical debt
-- **1 - Schlecht:** Major refactoring required
-- **0 - Kritisch:** Architecture fundamentally broken
-
-**Your Score: ${overallScore}/5** - ${getScoreDescription(currentScore)}
-
----
-
-**Analysis completed at:** ${new Date().toISOString()}  
-**Tool:** MMI Analyzer v0.2.0 (Carola Lilienthal Framework)
-
-`;
-
+/**
+ * DETAILED: Ausführliche Roadmap
+ */
+function formatDetailedRoadmap(currentScore) {
+  let report = `## 🚀 Improvement Roadmap\n\n`;
+  
+  if (currentScore >= 4.0) {
+    report += `**Current State:** Excellent (${currentScore}/5)\n\n`;
+    report += `Your architecture is strong. Focus on:\n`;
+    report += `- Maintaining current quality standards\n`;
+    report += `- Code reviews to prevent regressions\n`;
+    report += `- Documenting architectural decisions\n\n`;
+  } else if (currentScore >= 3.0) {
+    report += `**This Sprint:**\n`;
+    report += `- Address HIGH priority items above\n`;
+    report += `- Expected improvement: ${currentScore} → ${Math.min(5, currentScore + 0.8).toFixed(1)}\n\n`;
+    report += `**This Quarter:**\n`;
+    report += `- Complete all dimension improvements\n`;
+    report += `- Target score: 4.5+/5\n\n`;
+  } else {
+    report += `**Immediate (This Week):**\n`;
+    report += `- Fix critical violations in highest-impact dimension\n`;
+    report += `- Expected: ${currentScore} → ${Math.min(5, currentScore + 1.0).toFixed(1)}\n\n`;
+    report += `**This Sprint:**\n`;
+    report += `- Address all HIGH priority items\n`;
+    report += `- Expected: ${Math.min(5, currentScore + 1.5).toFixed(1)}\n\n`;
+    report += `**This Quarter:**\n`;
+    report += `- Systematic refactoring of all dimensions\n`;
+    report += `- Target: 4.0+/5\n\n`;
+  }
+  
   return report;
 }
 
@@ -166,11 +157,7 @@ Your architecture is strong. Focus on:
  */
 export function formatMonitoringStatus(watchedProjects, monitoredProjects, historyStorage) {
   if (monitoredProjects.length === 0) {
-    return `ℹ️ **No Monitored Projects**
-
-No projects are currently being monitored.
-
-Use \`start_monitoring\` to begin tracking a project's architecture quality over time.`;
+    return `ℹ️ **No Monitored Projects**\n\nNo projects are currently being monitored.\n\nUse \`start_monitoring\` to begin tracking a project's architecture quality over time.`;
   }
   
   let report = `# 📊 MMI Monitoring Status\n\n`;
@@ -198,7 +185,12 @@ Use \`start_monitoring\` to begin tracking a project's architecture quality over
       report += `\n\n**Recent Trend:**\n`;
       report += '```\n';
       recent.forEach(m => {
-        const time = new Date(m.timestamp).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+        const time = new Date(m.timestamp).toLocaleString('de-DE', { 
+          day: '2-digit', 
+          month: '2-digit', 
+          hour: '2-digit', 
+          minute: '2-digit' 
+        }).replace(',', '');
         const bar = '█'.repeat(Math.round(m.overall)) + '░'.repeat(5 - Math.round(m.overall));
         report += `${time}  ${m.overall.toFixed(1)}  ${bar}\n`;
       });
@@ -237,12 +229,4 @@ function getOverallLevel(score) {
   if (score >= 1.5) return 'Verbesserungswürdig';
   if (score >= 0.5) return 'Schlecht';
   return 'Kritisch';
-}
-
-function getScoreDescription(score) {
-  if (score >= 4.5) return 'Outstanding architecture quality';
-  if (score >= 3.5) return 'Good architecture with room for improvement';
-  if (score >= 2.5) return 'Acceptable but needs attention';
-  if (score >= 1.5) return 'Significant refactoring recommended';
-  return 'Critical issues require immediate action';
 }

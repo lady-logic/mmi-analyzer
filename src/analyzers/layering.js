@@ -1,34 +1,35 @@
 import fs from 'fs';
 import path from 'path';
+import { hasFileChanged } from '../utils/file-cache.js';
 
 /**
  * Analyzes Clean Architecture layering violations
  * @param {string} projectPath - Path to the C# project
- * @returns {Object} Analysis results with violations and score
+ * @param {boolean} useCache - Use file cache (default: true)
  */
-export function analyzeLayering(projectPath) {
+export function analyzeLayering(projectPath, useCache = true) {
   const violations = [];
   const files = findCSharpFiles(projectPath);
   
   console.error(`[MMI] Analyzing ${files.length} files in ${projectPath}`);
   
   for (const file of files) {
+    // Skip unchanged files
+    if (useCache && !hasFileChanged(file)) {
+      continue;
+    }
+    
     const relativePath = file.replace(projectPath, '');
     const content = fs.readFileSync(file, 'utf8');
     
-    // Detect which layer this file belongs to
     const layer = detectLayer(relativePath);
-    if (!layer) continue; // Skip files not in known layers
+    if (!layer) continue;
     
-    // Extract using statements
     const usings = extractUsings(content);
-    
-    // Check for violations
     const fileViolations = checkViolations(layer, usings, relativePath);
     violations.push(...fileViolations);
   }
   
-  // Calculate score (0-5)
   const score = calculateScore(violations.length, files.length);
   
   return {
@@ -41,9 +42,6 @@ export function analyzeLayering(projectPath) {
   };
 }
 
-/**
- * Find all C# files recursively
- */
 function findCSharpFiles(dir) {
   let results = [];
   
@@ -54,7 +52,6 @@ function findCSharpFiles(dir) {
       const fullPath = path.join(dir, item);
       const stat = fs.statSync(fullPath);
       
-      // Skip bin, obj, node_modules
       if (item === 'bin' || item === 'obj' || item === 'node_modules') {
         continue;
       }
@@ -72,9 +69,6 @@ function findCSharpFiles(dir) {
   return results;
 }
 
-/**
- * Detect which layer a file belongs to
- */
 function detectLayer(filePath) {
   const normalized = filePath.replace(/\\/g, '/');
   
@@ -85,12 +79,9 @@ function detectLayer(filePath) {
   if (normalized.includes('/API/')) return 'API';
   if (normalized.includes('/Web/')) return 'Web';
   
-  return null; // Not in a known layer
+  return null;
 }
 
-/**
- * Extract using statements from C# code
- */
 function extractUsings(content) {
   const usings = [];
   const regex = /using\s+([\w\.]+);/g;
@@ -98,7 +89,6 @@ function extractUsings(content) {
   
   while ((match = regex.exec(content)) !== null) {
     const namespace = match[1];
-    // Skip System namespaces
     if (!namespace.startsWith('System')) {
       usings.push(namespace);
     }
@@ -107,14 +97,10 @@ function extractUsings(content) {
   return usings;
 }
 
-/**
- * Check for layering violations
- */
 function checkViolations(layer, usings, filePath) {
   const violations = [];
   const fileName = path.basename(filePath);
   
-  // Define forbidden dependencies per layer
   const rules = {
     'Domain': ['Application', 'Infrastructure', 'Presentation', 'API', 'Web'],
     'Application': ['Infrastructure', 'Presentation', 'API', 'Web'],
@@ -141,44 +127,32 @@ function checkViolations(layer, usings, filePath) {
   return violations;
 }
 
-/**
- * Get severity of violation
- */
 function getSeverity(fromLayer, toLayer) {
-  // Domain → Infrastructure is CRITICAL
   if (fromLayer === 'Domain' && toLayer === 'Infrastructure') {
     return 'CRITICAL';
   }
-  // Domain → Application is HIGH
   if (fromLayer === 'Domain' && toLayer === 'Application') {
     return 'HIGH';
   }
-  // Application → Infrastructure is MEDIUM
   if (fromLayer === 'Application' && toLayer === 'Infrastructure') {
     return 'MEDIUM';
   }
   return 'LOW';
 }
 
-/**
- * Calculate MMI score (0-5)
- */
 function calculateScore(violationCount, totalFiles) {
   if (totalFiles === 0) return 5;
   
   const violationRate = violationCount / totalFiles;
   
   if (violationCount === 0) return 5;
-  if (violationRate < 0.02) return 4; // < 2% violations
-  if (violationRate < 0.05) return 3; // < 5% violations
-  if (violationRate < 0.10) return 2; // < 10% violations
-  if (violationRate < 0.20) return 1; // < 20% violations
-  return 0; // >= 20% violations
+  if (violationRate < 0.02) return 4;
+  if (violationRate < 0.05) return 3;
+  if (violationRate < 0.10) return 2;
+  if (violationRate < 0.20) return 1;
+  return 0;
 }
 
-/**
- * Get MMI level description
- */
 function getLevel(score) {
   const levels = {
     5: 'Exzellent',

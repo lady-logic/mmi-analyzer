@@ -1,13 +1,13 @@
 import fs from 'fs';
 import path from 'path';
+import { hasFileChanged } from '../utils/file-cache.js';
 
 /**
  * Analyzes separation of abstraction levels
- * Detects mixing of business logic with technical details
  * @param {string} projectPath - Path to the C# project
- * @returns {Object} Analysis results with mixed abstractions and score
+ * @param {boolean} useCache - Use file cache (default: true)
  */
-export function analyzeAbstraction(projectPath) {
+export function analyzeAbstraction(projectPath, useCache = true) {
   const files = findCSharpFiles(projectPath);
   const mixedAbstractions = [];
   const codeExamples = [];
@@ -15,17 +15,20 @@ export function analyzeAbstraction(projectPath) {
   console.error(`[MMI] Analyzing abstraction levels for ${files.length} files`);
   
   for (const file of files) {
+    // Skip unchanged
+    if (useCache && !hasFileChanged(file)) {
+      continue;
+    }
+    
     const relativePath = file.replace(projectPath, '');
     const content = fs.readFileSync(file, 'utf8');
     const fileName = path.basename(file);
     
-    // Check for mixed abstractions
     const issues = detectMixedAbstractions(content, fileName, relativePath);
     
     if (issues.length > 0) {
       mixedAbstractions.push(...issues);
       
-      // Store code example for first few files
       if (codeExamples.length < 5) {
         codeExamples.push({
           file: fileName,
@@ -37,7 +40,6 @@ export function analyzeAbstraction(projectPath) {
     }
   }
   
-  // Calculate score
   const score = calculateScore(mixedAbstractions.length, files.length);
   
   return {

@@ -36,9 +36,10 @@ export function handleStartMonitoring(args) {
     
     // Run initial analysis
     console.error('[MMI] Running initial analysis...');
-    const layering = analyzeLayering(projectPath);
-    const encapsulation = analyzeEncapsulation(projectPath);
-    const abstraction = analyzeAbstraction(projectPath);
+    // Initial analysis WITHOUT cache
+    const layering = analyzeLayering(projectPath, false);
+    const encapsulation = analyzeEncapsulation(projectPath, false);
+    const abstraction = analyzeAbstraction(projectPath, false);
     
     const overallScore = ((layering.score + encapsulation.score + abstraction.score) / 3);
     
@@ -55,9 +56,10 @@ export function handleStartMonitoring(args) {
     const started = fileWatcher.startWatching(projectPath, (changedPath, changedFiles) => {
       console.error(`[MMI] Files changed, running analysis...`);
       
-      const l = analyzeLayering(changedPath);
-      const e = analyzeEncapsulation(changedPath);
-      const a = analyzeAbstraction(changedPath);
+      // Nur geänderte Dateien werden analysiert
+      const l = analyzeLayering(changedPath, true);   
+      const e = analyzeEncapsulation(changedPath, true);
+      const a = analyzeAbstraction(changedPath, true);
       
       const overall = ((l.score + e.score + a.score) / 3);
       
