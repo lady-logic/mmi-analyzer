@@ -10,6 +10,13 @@ This MCP server provides automated analysis of .NET/C# projects to assess archit
 - **Dimension 5: Encapsulation** - Analyzes public vs internal type visibility
 - **Dimension 8: Abstraction Levels** - Detects mixing of business logic with technical details
 
+## Features
+
+**Token-Optimized Reports**: Compact mode reduces token usage by 66%  
+**Interactive Heatmap**: D3.js visualization of architecture quality  
+**Incremental Analysis**: File-hash caching for 70% faster monitoring  
+**Live Monitoring**: Real-time analysis with trend tracking 
+
 ## Installation
 
 ### Prerequisites
@@ -55,26 +62,59 @@ The MMI Analyzer provides four tools accessible via Cursor's AI assistant:
 ### 1. Complete MMI Analysis
 ```
 analyze_mmi(projectPath: "D:/Projects/MyApp")
+analyze_mmi(projectPath: "D:/Projects/MyApp", mode: "detailed")  // Full report
 ```
 Runs all three dimension analyses and provides an overall architecture quality score.
 
-### 2. Layering Analysis
+### 2. Interactive Architecture Heatmap
+```
+visualize_architecture(projectPath: "D:/Projects/MyApp")
+```
+Generates D3.js visualization showing:
+- Files as nodes colored by quality score (green=excellent, red=critical)
+- Dependencies as links
+- Violations highlighted
+- Interactive filtering by layer
+
+### 3. Live Monitoring
+```
+start_monitoring(projectPath: "D:/Projects/MyApp")
+get_monitoring_status()
+stop_monitoring(projectPath: "D:/Projects/MyApp")
+```
+Watches `.cs` files and automatically analyzes changes with trend visualization.
+
+### 4. Layering Analysis
 ```
 analyze_layering(projectPath: "D:/Projects/MyApp")
 ```
 Detects Clean Architecture violations (e.g., Domain depending on Infrastructure).
 
-### 3. Encapsulation Analysis
+### 5. Encapsulation Analysis
 ```
 analyze_encapsulation(projectPath: "D:/Projects/MyApp")
 ```
 Identifies over-exposed types that should be internal.
 
-### 4. Abstraction Level Analysis
+### 6. Abstraction Level Analysis
 ```
 analyze_abstraction(projectPath: "D:/Projects/MyApp")
 ```
 Finds mixing of business logic with technical details (SQL, HTTP, File I/O).
+
+## Report Modes
+
+### Compact Mode (Default)
+- Token-optimized output (~66% reduction)
+- Grouped violations
+- Concise recommendations
+- Perfect for quick checks and monitoring
+
+### Detailed Mode
+- Full violation listings
+- Code examples
+- Comprehensive tables
+- Ideal for documentation and deep analysis
 
 ## Example Output
 
@@ -97,10 +137,17 @@ Overall MMI Score: 4.2/5 (Gut)
 mmi-analyzer/
 ├── src/
 │   ├── server.js              # MCP server implementation
-│   └── analyzers/
-│       ├── layering.js        # Dimension 2: Layer dependency analysis
-│       ├── encapsulation.js   # Dimension 5: Visibility analysis
-│       └── abstraction.js     # Dimension 8: Abstraction mixing detection
+│   ├── config/
+│   │   └── report-config.js   # Report mode configuration
+│   ├── analyzers/
+│   │   ├── layering.js        # Dimension 2: Layer dependencies
+│   │   ├── encapsulation.js   # Dimension 5: Type visibility
+│   │   └── abstraction.js     # Dimension 8: Abstraction mixing
+│   ├── formatters/            # Report formatters (compact/detailed)
+│   ├── monitoring/            # File watching & history
+│   ├── visualizations/        # Heatmap generator
+│   └── utils/
+│       └── file-cache.js      # Hash-based caching
 ├── package.json
 └── README.md
 ```
@@ -115,6 +162,13 @@ mmi-analyzer/
 - **1 - Schlecht**: Major refactoring required
 - **0 - Kritisch**: Architecture fundamentally broken
 
+## Performance
+
+- **Compact reports**: ~2,400 tokens (vs. 7,000 detailed)
+- **Monitoring**: Only analyzes changed files (70% reduction)
+- **Caching**: MD5 hash-based file tracking
+- **First analysis**: Full scan, subsequent: incremental
+
 ## Troubleshooting
 
 ### Server not connecting
@@ -125,6 +179,9 @@ mmi-analyzer/
 ### No analysis results
 - Ensure the project path contains `.cs` files
 - Verify project follows folder structure (`Domain/`, `Application/`, `Infrastructure/`)
+
+### Cache issues
+- Delete `.mmi-cache.json` in project root to force full re-analysis
 
 ## Contributing
 
@@ -142,4 +199,4 @@ MIT
 
 ---
 
-**Status**: Experimental | **Version**: 0.1.0
+**Status**: Experimental | **Version**: 0.3.0
