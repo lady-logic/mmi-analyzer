@@ -266,6 +266,7 @@ export function generateHeatmap(layering, encapsulation, abstraction) {
   <div id="container">
     <div id="header">
       <h1>🗺️ MMI Architecture Heatmap - ${projectName}</h1>
+      
       <div id="stats">
         <div class="stat">
           <span>Overall Score:</span>

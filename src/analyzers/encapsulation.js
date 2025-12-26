@@ -1,13 +1,14 @@
 import fs from 'fs';
 import path from 'path';
 import { hasFileChanged } from '../utils/file-cache.js';
+import { cleanCode } from '../utils/code-cleaner.js';
 
 /**
  * Analyzes encapsulation quality
  * @param {string} projectPath - Path to the C# project
  * @param {boolean} useCache - Use file cache (default: true)
  */
-export function analyzeEncapsulation(projectPath, useCache = true) {
+export function analyzeEncapsulation(projectPath, useCache = false) {
   const files = findCSharpFiles(projectPath);
   
   const stats = {
@@ -30,7 +31,8 @@ export function analyzeEncapsulation(projectPath, useCache = true) {
     }
     
     const relativePath = file.replace(projectPath, '');
-    const content = fs.readFileSync(file, 'utf8');
+    const rawContent = fs.readFileSync(file, 'utf8');
+    const content = cleanCode(rawContent);
     const fileName = path.basename(file);
     
     analyzeVisibility(content, stats);

@@ -1,5 +1,5 @@
 import path from 'path';
-import * as fileWatcher from '../monitoring/file-watcher.js';
+import * as fileWatcher from '../monitoring/simple-watcher.js';
 import * as historyStorage from '../monitoring/history-storage.js';
 import { analyzeLayering } from '../analyzers/layering.js';
 import { analyzeEncapsulation } from '../analyzers/encapsulation.js';
@@ -35,13 +35,22 @@ export function handleStartMonitoring(args) {
     historyStorage.initializeProject(projectPath);
     
     // Run initial analysis
-    console.error('[MMI] Running initial analysis...');
+    console.error('[MMI] ========================================');
+    console.error('[MMI] STARTING MONITORING');
+    console.error('[MMI] ========================================');
+    console.error('[MMI] Project path:', projectPath);
     // Initial analysis WITHOUT cache
     const layering = analyzeLayering(projectPath, false);
     const encapsulation = analyzeEncapsulation(projectPath, false);
     const abstraction = analyzeAbstraction(projectPath, false);
     
     const overallScore = ((layering.score + encapsulation.score + abstraction.score) / 3);
+
+    console.error('[MMI] Initial scores:');
+    console.error('[MMI]   Layering:', layering.score);
+    console.error('[MMI]   Encapsulation:', encapsulation.score);
+    console.error('[MMI]   Abstraction:', abstraction.score);
+    console.error('[MMI]   Overall:', overallScore.toFixed(1));
     
     // Save initial measurement
     historyStorage.addMeasurement(projectPath, {
@@ -57,9 +66,9 @@ export function handleStartMonitoring(args) {
       console.error(`[MMI] Files changed, running analysis...`);
       
       // Nur geänderte Dateien werden analysiert
-      const l = analyzeLayering(changedPath, true);   
-      const e = analyzeEncapsulation(changedPath, true);
-      const a = analyzeAbstraction(changedPath, true);
+      const l = analyzeLayering(changedPath, false);   
+      const e = analyzeEncapsulation(changedPath, false);
+      const a = analyzeAbstraction(changedPath, false);
       
       const overall = ((l.score + e.score + a.score) / 3);
       

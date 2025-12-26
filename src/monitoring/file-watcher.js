@@ -1,4 +1,5 @@
 import chokidar from 'chokidar';
+import path from 'path';
 
 // Active watchers: Map<projectPath, watcher>
 const activeWatchers = new Map();
@@ -19,16 +20,25 @@ export function startWatching(projectPath, onChangeCallback) {
     return false;
   }
 
+  console.error(`[MMI] ========================================`);
   console.error(`[MMI] Starting file watcher for: ${projectPath}`);
+  console.error(`[MMI] ========================================`);
+
+  const absolutePattern = path.join(projectPath, '**/*.cs').replace(/\\/g, '/');
+  console.error(`[MMI] Watching pattern: ${absolutePattern}`);
 
   // Create watcher
-  const watcher = chokidar.watch('**/*.cs', {
-    cwd: projectPath,
+  const watcher = chokidar.watch(absolutePattern, {
     ignored: ['**/bin/**', '**/obj/**', '**/node_modules/**'],
-    ignoreInitial: true, // Don't trigger for existing files
+    ignoreInitial: true,
     persistent: true,
+    
+    usePolling: true,           
+    interval: 1000,              
+    binaryInterval: 1000,
+    
     awaitWriteFinish: {
-      stabilityThreshold: 500, // Wait 500ms after last change
+      stabilityThreshold: 500,
       pollInterval: 100
     }
   });
@@ -37,13 +47,17 @@ export function startWatching(projectPath, onChangeCallback) {
   let changedFiles = new Set();
 
   // File change handler
-  const handleChange = (path) => {
-    console.error(`[MMI] File changed: ${path}`);
-    changedFiles.add(path);
+  const handleChange = (filePath) => {
+    const relativePath = filePath.replace(projectPath, '').replace(/^[\/\\]/, '');
+
+    console.error(`[MMI] ⚡ FILE CHANGED: ${relativePath}`);
+    console.error(`[MMI]    Full path: ${projectPath}/${relativePath}`);
+    changedFiles.add(relativePath);
 
     // Clear existing debounce timer
     if (debounceTimers.has(projectPath)) {
       clearTimeout(debounceTimers.get(projectPath));
+      console.error(`[MMI]    Debounce timer reset`);
     }
 
     // Set new debounce timer (wait 2 seconds after last change)
@@ -51,7 +65,7 @@ export function startWatching(projectPath, onChangeCallback) {
       const files = Array.from(changedFiles);
       changedFiles.clear();
       
-      console.error(`[MMI] Triggering analysis for ${files.length} files`);
+      console.error(`[MMI] 🔄 TRIGGERING ANALYSIS for ${files.length} files:`);
       onChangeCallback(projectPath, files);
       
       debounceTimers.delete(projectPath);
@@ -62,22 +76,29 @@ export function startWatching(projectPath, onChangeCallback) {
 
   // Listen to events
   watcher
-    .on('change', handleChange)
-    .on('add', handleChange)
-    .on('unlink', (path) => {
-      console.error(`[MMI] File deleted: ${path}`);
-      // Still trigger analysis on delete
-      handleChange(path);
-    })
-    .on('error', (error) => {
-      console.error(`[MMI] Watcher error:`, error);
-    })
-    .on('ready', () => {
-      console.error(`[MMI] Watcher ready for: ${projectPath}`);
-    });
+  .on('change', (filePath) => {
+    console.error(`[MMI] 📝 EVENT: change - ${filePath}`);
+    handleChange(filePath);
+  })
+  .on('add', (filePath) => {
+    console.error(`[MMI] ➕ EVENT: add - ${filePath}`);
+    handleChange(filePath);
+  })
+  .on('unlink', (filePath) => {
+    console.error(`[MMI] ➖ EVENT: unlink - ${filePath}`);
+    handleChange(filePath);
+  })
+  .on('error', (error) => {
+    console.error(`[MMI] ❌ WATCHER ERROR:`, error);
+  })
+  .on('ready', () => {
+    console.error(`[MMI] ✅ WATCHER READY`);
+    console.error(`[MMI]    Pattern: ${absolutePattern}`);
+    console.error(`[MMI]    Polling: ENABLED (Windows mode)`);
+  });
 
-  activeWatchers.set(projectPath, watcher);
-  return true;
+activeWatchers.set(projectPath, watcher);
+return true;
 }
 
 /**

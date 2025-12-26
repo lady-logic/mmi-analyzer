@@ -129,9 +129,9 @@ export function handleArchitectureHeatmap(args) {
   try {
     console.error('[MMI] Generating architecture heatmap...');
     
-    const layering = analyzeLayering(projectPath);
-    const encapsulation = analyzeEncapsulation(projectPath);
-    const abstraction = analyzeAbstraction(projectPath);
+    const layering = analyzeLayering(projectPath, false);
+    const encapsulation = analyzeEncapsulation(projectPath, false);
+    const abstraction = analyzeAbstraction(projectPath, false);
     
     const html = generateHeatmap(layering, encapsulation, abstraction);
     
