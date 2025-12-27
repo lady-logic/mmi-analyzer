@@ -15,7 +15,8 @@ import {
   handleEncapsulationAnalysis,
   handleAbstractionAnalysis,
   handleMMIAnalysis,
-  handleArchitectureHeatmap
+  handleArchitectureHeatmap,
+  handleCycleAnalysis
 } from './tools/analysis-tools.js';
 
 import {
@@ -177,6 +178,26 @@ const TOOLS = [
       required: ["projectPath"],
     },
   },
+  {
+    name: "analyze_cycles",
+      description: "Analyzes circular dependencies (cycles) in the codebase. Detects files that depend on each other in a circular way, which violates good architecture principles. Critical when Domain layer is involved.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          projectPath: {
+            type: "string",
+            description: "Path to the C# project directory",
+          },
+          mode: {
+            type: "string",
+            description: "Report mode: 'compact' (default, token-optimized) or 'detailed' (full info)",
+            enum: ["compact", "detailed"],
+            default: "compact"
+          }
+        },
+        required: ["projectPath"],
+      },
+  }
 ];
 
 // List available tools
@@ -232,6 +253,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       
     case "visualize_architecture":
       return handleArchitectureHeatmap(args);
+
+    case "analyze_cycles":
+      return handleCycleAnalysis(args);
       
     default:
       throw new Error(`Unknown tool: ${name}`);

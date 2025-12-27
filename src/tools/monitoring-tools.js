@@ -43,6 +43,7 @@ export function handleStartMonitoring(args) {
     const layering = analyzeLayering(projectPath, false);
     const encapsulation = analyzeEncapsulation(projectPath, false);
     const abstraction = analyzeAbstraction(projectPath, false);
+    const cycles = analyzeCycles(projectPath, false);
     
     const overallScore = ((layering.score + encapsulation.score + abstraction.score) / 3);
 
@@ -57,6 +58,7 @@ export function handleStartMonitoring(args) {
       layering: layering.score,
       encapsulation: encapsulation.score,
       abstraction: abstraction.score,
+      cycles: cycles.score,
       overall: overallScore,
       filesAnalyzed: layering.totalFiles
     });

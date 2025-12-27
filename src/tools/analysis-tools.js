@@ -9,6 +9,8 @@ import { generateHeatmap } from '../visualizations/heatmap-generator.js';
 import { validateProjectPath } from '../utils/validation.js';
 import { logToolCall, logError } from '../utils/logging.js';
 import { createSuccessResponse, createJsonErrorResponse } from '../utils/response.js';
+import { analyzeCycles } from '../analyzers/cycle-analyzer.js';
+import { formatCycleReport } from '../formatters/cycle-formatter.js';
 
 /**
  * Handle layering analysis tool
@@ -104,8 +106,9 @@ export function handleMMIAnalysis(args) {
     const layering = analyzeLayering(projectPath, useCache);
     const encapsulation = analyzeEncapsulation(projectPath, useCache);
     const abstraction = analyzeAbstraction(projectPath, useCache);
+    const cycles = analyzeCycles(projectPath, useCache);
     
-    const report = formatCombinedReport(layering, encapsulation, abstraction, mode);
+    const report = formatCombinedReport(layering, encapsulation, abstraction, cycles, mode);
     return createSuccessResponse(report);
   } catch (error) {
     logError(error, 'analyze_mmi');
@@ -132,8 +135,9 @@ export function handleArchitectureHeatmap(args) {
     const layering = analyzeLayering(projectPath, false);
     const encapsulation = analyzeEncapsulation(projectPath, false);
     const abstraction = analyzeAbstraction(projectPath, false);
+    const cycles = analyzeCycles(projectPath, false);
     
-    const html = generateHeatmap(layering, encapsulation, abstraction);
+    const html = generateHeatmap(layering, encapsulation, abstraction, cycles);
     
     return {
       content: [
@@ -146,6 +150,29 @@ export function handleArchitectureHeatmap(args) {
     };
   } catch (error) {
     logError(error, 'visualize_architecture');
+    return createJsonErrorResponse(error.message, 'Check the log file for details.');
+  }
+}
+
+/**
+ * Handle cycle analysis tool
+ */
+export function handleCycleAnalysis(args) {
+  logToolCall('analyze_cycles', args);
+  
+  const { projectPath, mode = 'compact' } = args;
+  const validation = validateProjectPath(projectPath);
+  
+  if (!validation.valid) {
+    return createJsonErrorResponse(validation.error, 'Please check if the path is correct.');
+  }
+  
+  try {
+    const result = analyzeCycles(projectPath);
+    const report = formatCycleReport(result, mode);
+    return createSuccessResponse(report);
+  } catch (error) {
+    logError(error, 'analyze_cycles');
     return createJsonErrorResponse(error.message, 'Check the log file for details.');
   }
 }

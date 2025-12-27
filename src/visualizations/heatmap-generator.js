@@ -1,14 +1,15 @@
 import path from 'path';
 import fs from 'fs';
+import graphlib from 'graphlib';
 
 /**
  * Generate interactive architecture heatmap HTML
  */
-export function generateHeatmap(layering, encapsulation, abstraction) {
+export function generateHeatmap(layering, encapsulation, abstraction, cycles) {
   const projectName = path.basename(layering.projectPath);
   
   // Prepare data for visualization
-  const graphData = prepareGraphData(layering, encapsulation, abstraction);
+  const graphData = prepareGraphData(layering, encapsulation, abstraction, cycles);
   
   const htmlContent = `<!DOCTYPE html>
 <html>
@@ -260,6 +261,40 @@ export function generateHeatmap(layering, encapsulation, abstraction) {
     .close-sidebar:hover {
       background: #444;
     }
+
+    .link-cycle {
+      stroke: #ff0080 !important;
+      stroke-width: 3px !important;
+      stroke-dasharray: 8,4;
+      animation: cycle-pulse 2s ease-in-out infinite;
+    }
+    
+    @keyframes cycle-pulse {
+      0%, 100% { 
+        opacity: 0.7;
+        stroke-width: 3px;
+      }
+      50% { 
+        opacity: 1.0;
+        stroke-width: 4px;
+      }
+    }
+    
+    .node.in-cycle {
+      stroke: #ff0080;
+      stroke-width: 3px;
+    }
+    
+    .cycle-badge {
+      display: inline-block;
+      background: #ff0080;
+      color: #fff;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-left: 8px;
+    }
   </style>
 </head>
 <body>
@@ -288,6 +323,10 @@ export function generateHeatmap(layering, encapsulation, abstraction) {
           <span>Layers:</span>
           <span>${graphData.layers.length}</span>
         </div>
+        <div class="stat">
+          <span>Cycles:</span>
+          <span class="cycle-badge">${graphData.cycleCount}</span>
+        </div>
       </div>
       <div id="filters">
         <button class="filter-btn active" onclick="filterGraph('all')">All Files</button>
@@ -295,6 +334,7 @@ export function generateHeatmap(layering, encapsulation, abstraction) {
         <button class="filter-btn" onclick="filterGraph('domain')">Domain</button>
         <button class="filter-btn" onclick="filterGraph('application')">Application</button>
         <button class="filter-btn" onclick="filterGraph('infrastructure')">Infrastructure</button>
+        <button class="filter-btn" onclick="filterGraph('cycles')">Cycles</button>
       </div>
     </div>
     
@@ -324,6 +364,14 @@ export function generateHeatmap(layering, encapsulation, abstraction) {
         <div class="legend-item">
           <div class="legend-color" style="background: #ef4444;"></div>
           <span>Critical (<2.5)</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color" style="background: #ff0080;"></div>
+        <span>Cycle</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color" style="background: #666;"></div>
+          <span>Dependency</span>
         </div>
       </div>
     </div>
@@ -379,20 +427,29 @@ export function generateHeatmap(layering, encapsulation, abstraction) {
       .selectAll("line")
       .data(data.links)
       .join("line")
-      .attr("class", d => d.violation ? "link link-violation" : "link")
-      .attr("stroke", d => d.violation ? "#ef4444" : "#666")
-      .attr("stroke-width", 1.5)
+      .attr("class", d => {
+        let classes = "link";
+        if (d.cycleId) classes += " link-cycle"; 
+        if (d.violation) classes += " link-violation";
+        return classes;
+      })
+      .attr("stroke", d => d.cycleId ? "#ff0080" : (d.violation ? "#ef4444" : "#666"))
+      .attr("stroke-width", d => d.cycleId ? 3 : 1.5)
       .attr("marker-end", "url(#arrowhead)");
     
     const node = g.append("g")
       .selectAll("circle")
       .data(data.nodes)
       .join("circle")
-      .attr("class", "node")
+      .attr("class", d => {
+        let classes = "node";
+        if (d.inCycle) classes += " in-cycle"; 
+        return classes;
+      })
       .attr("r", d => d.issueCount > 0 ? 15 + d.issueCount * 2 : 12)
       .attr("fill", d => getNodeColor(d.score))
-      .attr("stroke", "#fff")
-      .attr("stroke-width", 2)
+      .attr("stroke", d => d.inCycle ? "#ff0080" : "#fff") 
+      .attr("stroke-width", d => d.inCycle ? 3 : 2) 
       .call(drag(simulation))
       .on("click", showDetails);
     
@@ -414,7 +471,8 @@ export function generateHeatmap(layering, encapsulation, abstraction) {
         '<strong>' + d.name + '</strong><br/>' +
         'Layer: ' + d.layer + '<br/>' +
         'Score: ' + d.score.toFixed(1) + '/5<br/>' +
-        'Issues: ' + d.issueCount
+        'Issues: ' + d.issueCount +
+        (d.inCycle ? '<br/><span style="color:#ff0080">In Cycle!</span>' : '')
       )
       .style("left", (event.pageX + 10) + "px")
       .style("top", (event.pageY - 28) + "px");
@@ -476,6 +534,7 @@ export function generateHeatmap(layering, encapsulation, abstraction) {
       node.classed('filtered', d => {
         if (filter === 'all') return false;
         if (filter === 'issues') return d.issueCount === 0;
+        if (filter === 'cycles') return !d.inCycle;
         if (filter === 'domain') return d.layer !== 'Domain';
         if (filter === 'application') return d.layer !== 'Application';
         if (filter === 'infrastructure') return d.layer !== 'Infrastructure';
@@ -485,6 +544,7 @@ export function generateHeatmap(layering, encapsulation, abstraction) {
       label.classed('filtered', d => {
         if (filter === 'all') return false;
         if (filter === 'issues') return d.issueCount === 0;
+        if (filter === 'cycles') return !d.inCycle;
         if (filter === 'domain') return d.layer !== 'Domain';
         if (filter === 'application') return d.layer !== 'Application';
         if (filter === 'infrastructure') return d.layer !== 'Infrastructure';
@@ -493,6 +553,7 @@ export function generateHeatmap(layering, encapsulation, abstraction) {
       
       link.classed('filtered', d => {
         if (filter === 'all') return false;
+        if (filter === 'cycles') return !d.cycleId;
         if (filter === 'issues') {
           const sourceNode = data.nodes.find(n => n.id === d.source.id);
           const targetNode = data.nodes.find(n => n.id === d.target.id);
@@ -543,15 +604,29 @@ export function generateHeatmap(layering, encapsulation, abstraction) {
 }
 
 /**
- * Prepare graph data - NOW INCLUDES ALL FILES
+ * Prepare graph data 
  */
-function prepareGraphData(layering, encapsulation, abstraction) {
+function prepareGraphData(layering, encapsulation, abstraction, cycles) { 
+  console.error('[MMI] 🔍 Starting prepareGraphData...');
+  
   const nodes = [];
   const links = [];
   const nodeMap = new Map();
   
   // Collect ALL C# files from the project
   const allFiles = findAllCSharpFiles(layering.projectPath);
+  console.error(`[MMI] 📁 Found ${allFiles.length} files`);
+  
+  // USE cycles from parameter instead of detecting again!
+  console.error(`[MMI] 🔄 Using cycle data: ${cycles.cycleCount} cycles`);
+  
+  const cycleData = {
+    cycles: cycles.cycles,
+    cycleCount: cycles.cycleCount,
+    filesInCycles: cycles.filesInCycles
+  };
+  
+  console.error(`[MMI] 🔄 Cycles:`, JSON.stringify(cycleData.cycles, null, 2));
   
   // Create issue maps for quick lookup
   const layerViolationMap = new Map();
@@ -571,6 +646,10 @@ function prepareGraphData(layering, encapsulation, abstraction) {
     if (!abstIssueMap.has(m.file)) abstIssueMap.set(m.file, []);
     abstIssueMap.get(m.file).push(m);
   });
+  
+  // Cycle file map
+  const filesInCycles = new Set(cycleData.filesInCycles);
+  console.error(`[MMI] 🔄 Files in cycles:`, Array.from(filesInCycles));
   
   // Create nodes for ALL files
   allFiles.forEach((filePath, index) => {
@@ -602,6 +681,18 @@ function prepareGraphData(layering, encapsulation, abstraction) {
       });
     });
     
+    // Add cycle info
+    const cyclesForFile = cycleData.cycles.filter(c => 
+      c.path.includes(fileName)
+    );
+    
+    cyclesForFile.forEach(cycle => {
+      issues.push({
+        type: '🔄 Circular Dependency',
+        description: `Part of cycle: ${cycle.path.join(' → ')} → ${cycle.path[0]}`
+      });
+    });
+    
     const issueCount = issues.length;
     const score = Math.max(0, 5 - (issueCount * 0.5));
     
@@ -615,19 +706,29 @@ function prepareGraphData(layering, encapsulation, abstraction) {
     else if (normalizedPath.includes('/API/')) layer = 'API';
     else if (normalizedPath.includes('/Web/')) layer = 'Web';
     
+    const inCycle = filesInCycles.has(fileName);
+    const cycleIds = cyclesForFile.map(c => c.id);
+    
+    // 🔍 DEBUG LOG
+    if (inCycle) {
+      console.error(`[MMI] 🔄 Node ${fileName} IS IN CYCLE! IDs: ${cycleIds.join(', ')}`);
+    }
+    
     nodes.push({
       id: fileName,
       name: fileName.replace('.cs', ''),
       layer: layer,
       score: score,
       issueCount: issueCount,
-      issues: issues
+      issues: issues,
+      inCycle: inCycle,
+      cycleIds: cycleIds
     });
     
     nodeMap.set(fileName, index);
   });
   
-  // Create links from violations
+  // Create links from violations AND from cycles!
   layering.violations.forEach(v => {
     if (!nodeMap.has(v.dependsOn)) {
       const targetIndex = nodes.length;
@@ -637,17 +738,89 @@ function prepareGraphData(layering, encapsulation, abstraction) {
         layer: v.dependsOn,
         score: 5,
         issueCount: 0,
-        issues: []
+        issues: [],
+        inCycle: false,
+        cycleIds: []
       });
       nodeMap.set(v.dependsOn, targetIndex);
+    }
+    
+    // Check if this link is part of a cycle
+    const cycleId = findCycleForLink(v.file, v.dependsOn, cycleData.cycles);
+    
+    if (cycleId) {
+      console.error(`[MMI] 🔄 Link ${v.file} → ${v.dependsOn} IS IN CYCLE ${cycleId}!`);
     }
     
     links.push({
       source: v.file,
       target: v.dependsOn,
-      violation: true
+      violation: true,
+      cycleId: cycleId
     });
   });
+  
+  // Create links for cycles that aren't violations!
+  cycleData.cycles.forEach(cycle => {
+    for (let i = 0; i < cycle.path.length; i++) {
+      const source = cycle.path[i];
+      const target = cycle.path[(i + 1) % cycle.path.length]; // Wrap around
+      
+      // Check if this link already exists
+      const existingLink = links.find(l => 
+        (l.source === source || l.source.id === source) && 
+        (l.target === target || l.target.id === target)
+      );
+      
+      if (!existingLink) {
+        console.error(`[MMI] 🔄 Adding cycle link: ${source} → ${target} (Cycle #${cycle.id})`);
+        
+        // Make sure both nodes exist
+        if (!nodeMap.has(source)) {
+          nodes.push({
+            id: source,
+            name: source.replace('.cs', ''),
+            layer: 'Unknown',
+            score: 5,
+            issueCount: 0,
+            issues: [],
+            inCycle: true,
+            cycleIds: [cycle.id]
+          });
+          nodeMap.set(source, nodes.length - 1);
+        }
+        
+        if (!nodeMap.has(target)) {
+          nodes.push({
+            id: target,
+            name: target.replace('.cs', ''),
+            layer: 'Unknown',
+            score: 5,
+            issueCount: 0,
+            issues: [],
+            inCycle: true,
+            cycleIds: [cycle.id]
+          });
+          nodeMap.set(target, nodes.length - 1);
+        }
+        
+        links.push({
+          source: source,
+          target: target,
+          violation: false, // Not a layering violation, but a cycle!
+          cycleId: cycle.id
+        });
+      } else if (!existingLink.cycleId) {
+        // Link exists but wasn't marked as cycle
+        existingLink.cycleId = cycle.id;
+        console.error(`[MMI] 🔄 Marked existing link as cycle: ${source} → ${target}`);
+      }
+    }
+  });
+  
+  console.error(`[MMI] ✅ PrepareGraphData complete: ${nodes.length} nodes, ${links.length} links`);
+  console.error(`[MMI] 🔄 Nodes in cycles: ${nodes.filter(n => n.inCycle).length}`);
+  console.error(`[MMI] 🔄 Links in cycles: ${links.filter(l => l.cycleId).length}`);
   
   const overallScore = (layering.score + encapsulation.score + abstraction.score) / 3;
   const layers = [...new Set(nodes.map(n => n.layer))];
@@ -660,8 +833,26 @@ function prepareGraphData(layering, encapsulation, abstraction) {
     totalFiles: allFiles.length,
     filesWithIssues,
     totalViolations: layering.violationCount + abstraction.issueCount,
-    layers
+    layers,
+    cycles: cycleData.cycles,
+    cycleCount: cycleData.cycleCount
   };
+}
+
+/**
+ * Find which cycle a link belongs to
+ */
+function findCycleForLink(source, target, cycles) {
+  for (const cycle of cycles) {
+    const sourceIdx = cycle.path.indexOf(source);
+    if (sourceIdx === -1) continue;
+    
+    const nextIdx = (sourceIdx + 1) % cycle.path.length;
+    if (cycle.path[nextIdx] === target) {
+      return cycle.id;
+    }
+  }
+  return null;
 }
 
 /**

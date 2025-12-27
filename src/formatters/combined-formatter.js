@@ -2,41 +2,44 @@ import path from 'path';
 import { getReportConfig } from '../config/report-config.js';
 
 /**
- * Format combined MMI report (all 3 dimensions)
+ * Format combined MMI report (all 4 dimensions) 
  * @param {Object} layering - Layering analysis result
  * @param {Object} encapsulation - Encapsulation analysis result
  * @param {Object} abstraction - Abstraction analysis result
+ * @param {Object} cycles - Cycle analysis result 
  * @param {string} mode - 'compact' or 'detailed'
  */
-export function formatCombinedReport(layering, encapsulation, abstraction, mode = 'compact') {
+export function formatCombinedReport(layering, encapsulation, abstraction, cycles, mode = 'compact') {
   const config = getReportConfig(mode);
-  const overallScore = ((layering.score + encapsulation.score + abstraction.score) / 3).toFixed(1);
+  
+  const overallScore = ((layering.score + encapsulation.score + abstraction.score + cycles.score) / 4).toFixed(1);
+  
   const overallLevel = getOverallLevel(parseFloat(overallScore));
   const projectName = path.basename(layering.projectPath);
   
-  // COMPACT: Kurzer Header
   let report = `# 🌳 MMI Analysis - ${projectName}\n\n`;
   report += `**Overall Score:** ${overallScore}/5 (${overallLevel})\n\n`;
   
-  // Scorecard (immer zeigen, aber kompakt)
+  // Scorecard
   report += `## 📊 Scorecard\n\n`;
   report += `| Dimension | Score | Status |\n`;
   report += `|-----------|-------|--------|\n`;
   report += `| Layering | ${layering.score}/5 | ${getStatusIcon(layering.score)} ${layering.level} |\n`;
   report += `| Encapsulation | ${encapsulation.score}/5 | ${getStatusIcon(encapsulation.score)} ${encapsulation.level} |\n`;
   report += `| Abstraction | ${abstraction.score}/5 | ${getStatusIcon(abstraction.score)} ${abstraction.level} |\n`;
+  report += `| Cycles | ${cycles.score}/5 | ${getStatusIcon(cycles.score)} ${cycles.level} |\n`; 
   report += `| **Overall** | **${overallScore}/5** | ${getStatusIcon(parseFloat(overallScore))} **${overallLevel}** |\n\n`;
   
-  // Details nur im detailed mode
+  // Details
   if (config.showDetailedStats) {
-    report += formatDetailedDimensionInfo(layering, encapsulation, abstraction);
+    report += formatDetailedDimensionInfo(layering, encapsulation, abstraction, cycles); 
   }
   
-  // Priority Actions (immer zeigen, aber kompakt)
-  report += `## 🎯 Priority Actions\n\n`;
-  report += formatCompactActions(layering, encapsulation, abstraction);
+  // Priority Actions
+  report += `## Priority Actions\n\n`;
+  report += formatCompactActions(layering, encapsulation, abstraction, cycles); 
   
-  // Roadmap (compact vs detailed)
+  // Roadmap
   if (config.groupSimilar) {
     report += formatCompactRoadmap(parseFloat(overallScore));
   } else {
@@ -49,7 +52,7 @@ export function formatCombinedReport(layering, encapsulation, abstraction, mode 
 /**
  * COMPACT: Kurze Action Items
  */
-function formatCompactActions(layering, encapsulation, abstraction) {
+function formatCompactActions(layering, encapsulation, abstraction, cycles) {
   const actions = [];
   
   if (layering.score < 4 && layering.violationCount > 0) {
@@ -62,6 +65,15 @@ function formatCompactActions(layering, encapsulation, abstraction) {
   
   if (abstraction.score < 4 && abstraction.issueCount > 0) {
     actions.push(`3️⃣ **Abstraction**: Separate ${abstraction.issueCount} mixed concerns → ${abstraction.score}→${Math.min(5, abstraction.score + 1)}`);
+  }
+
+  if (cycles.score < 4 && cycles.cycleCount > 0) {
+    const critical = cycles.cycles.filter(c => c.severity === 'CRITICAL').length;
+    if (critical > 0) {
+      actions.push(`4️⃣ **Cycles**: Break ${critical} CRITICAL cycles → ${cycles.score}→${Math.min(5, cycles.score + 2)}`);
+    } else {
+      actions.push(`4️⃣ **Cycles**: Resolve ${cycles.cycleCount} circular dependencies → ${cycles.score}→${Math.min(5, cycles.score + 1)}`);
+    }
   }
   
   if (actions.length === 0) {
@@ -95,7 +107,7 @@ function formatCompactRoadmap(currentScore) {
 /**
  * DETAILED: Ausführliche Dimension Info
  */
-function formatDetailedDimensionInfo(layering, encapsulation, abstraction) {
+function formatDetailedDimensionInfo(layering, encapsulation, abstraction, cycles) {
   let report = `## 📈 Dimension Details\n\n`;
   
   report += `### 🏛️ Dimension 2: Layering\n`;
@@ -112,6 +124,11 @@ function formatDetailedDimensionInfo(layering, encapsulation, abstraction) {
   report += `- **Files with Issues:** ${abstraction.filesWithIssues}\n`;
   report += `- **Total Issues:** ${abstraction.issueCount}\n`;
   report += `- **Status:** ${abstraction.issueCount === 0 ? '✅ Clean separation' : `⚠️ ${abstraction.issueCount} mixing issues`}\n\n`;
+  
+  report += `### 🔄 Dimension 9: Circular Dependencies\n`;
+  report += `- **Cycles Found:** ${cycles.cycleCount}\n`;
+  report += `- **Files in Cycles:** ${cycles.filesInCyclesCount}\n`;
+  report += `- **Status:** ${cycles.cycleCount === 0 ? '✅ Acyclic' : `⚠️ ${cycles.cycleCount} cycles detected`}\n\n`;
   
   report += `---\n\n`;
   
